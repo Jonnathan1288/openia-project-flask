@@ -26,15 +26,15 @@ openai.api_key = "sk-proj-nErfFLXsC91Q4jbcLn0bQ2BneGDofsB5lE7VAbAeXob8hO63MUG1NX
 
 async def human_query_to_sql(human_query: str):
 
-    # Obtenemos el esquema de la base de datos
+    # We get the database schema
     database_schema = database.get_schema()
 
     system_message = f"""
     Given the following schema, write a SQL query that retrieves the requested information. 
     Return the SQL query inside a JSON structure with the key "sql_query".
     <example>{{
-        "sql_query": "SELECT * FROM users WHERE age > 18;"
-        "original_query": "Show me all users older than 18 years old."
+        "sql_query": "SELECT * FROM services WHERE active;"
+        "original_query": "Show me all the services available."
     }}
     </example>
     <schema>
@@ -43,7 +43,7 @@ async def human_query_to_sql(human_query: str):
     """
     user_message = human_query
 
-    # Enviamos el esquema completo con la consulta al LLM
+    # We send the complete scheme with the query to the LLM
     response = openai.chat.completions.create(
         model="gpt-3.5-turbo",
         response_format={"type": "json_object"},
@@ -86,33 +86,32 @@ class PostHumanQueryPayload(BaseModel):
 class PostHumanQueryResponse(BaseModel):
     result: list
 
-
 @app.post(
-    "/human_query",
-    name="Human Query",
+    "/user-query",
+    name="User  Query",
     operation_id="post_human_query",
     description="Gets a natural language query, internally transforms it to a SQL query, queries the database, and returns the result.",
 )
 async def human_query(payload: PostHumanQueryPayload):
 
-    # Transforma la pregunta a sentencia SQL
+    # Transforms the question into a SQL statement
     sql_query = await human_query_to_sql(payload.human_query)
 
     if not sql_query:
-        return {"error": "Falló la generación de la consulta SQL"}
+        return {"err": "SQL query generation failed"}
 
     print('-----------------------------sql response ------------------------');    
     print(sql_query);    
     print('-----------------------------sql response ------------------------');    
     result_dict = json.loads(sql_query)
 
-    # Hace la consulta a la base de datos
+    # Makes the query to the database
     result = await database.query(result_dict["sql_query"])
 
-    # Transforma la respuesta SQL a un formato más humano
+    # Transforms the SQL response into a more human format
     answer = await build_answer(result, payload.human_query)
     if not answer:
-        return {"error": "Falló la generación de la respuesta"}
+        return {"err": "Response generation failed"}
 
     return {"answer": answer}
 
