@@ -1,0 +1,8 @@
+Flask
+FastAPI
+SQLAlchemy
+psycopg2-binary
+python-dotenv
+uvicorn
+openai
+
