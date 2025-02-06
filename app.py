@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 BACKEND_SERVER = os.getenv("SERVER_URL")
 
-app = FastAPI(servers=[{"url": "https://c4cd-45-164-64-132.ngrok-free.app"}])
+app = FastAPI(servers=[{"url": "https://6a2e-190-110-216-245.ngrok-free.app"}])
 
 print('----------------------------------------------------');
 print(BACKEND_SERVER)
@@ -55,18 +55,26 @@ async def human_query_to_sql(human_query: str):
 
     return response.choices[0].message.content
 
-
 async def build_answer(result: list[dict[str, Any]], human_query: str) -> str | None:
+    """
+    Dado una pregunta del usuario y la respuesta SQL de la base de datos, genera una respuesta en HTML bien estructurada y visualmente atractiva.
+    La respuesta debe estar estilizada con elementos HTML para mejorar la legibilidad y solo incluir registros activos.
+    """
+
+    active_results = [item for item in result if item.get("active")]
 
     system_message = f"""
-    Given a users question and the SQL rows response from the database from which the user wants to get the answer,
-    write a response to the user's question.
-    <user_question> 
-    {human_query}
-    </user_question>
-    <sql_response>
-    ${result} 
-    </sql_response>
+    Basado en la siguiente respuesta de la base de datos y la consulta del usuario, genera una respuesta en HTML visualmente atractiva y clara.
+    - Formatea la respuesta usando `<div>` para secciones, `<h2>` para títulos y `<p>` para descripciones.
+    - Si la consulta involucra productos o servicios, usa `<ul>` o `<ol>` con un estilo atractivo.
+    - Aplica estilos CSS para mejorar la presentación.
+    - Usa iconos (✅, 💰, 📞, ⭐) para mejorar la experiencia visual.
+    - Incluye un encabezado llamativo con fondo destacado.
+    - Presenta la información en una lista elegante con separación clara entre elementos.
+    - Finaliza con un mensaje amigable y una llamada a la acción, como "📞 Contáctanos para más información o asesoría personalizada".
+    <user_question>{human_query}</user_question>
+    <sql_response>{active_results}</sql_response>
+    Genera una estructura HTML válida en una sola línea sin saltos de línea ni espacios innecesarios, asegurando que luzca profesional y sea fácil de visualizar.
     """
 
     response = openai.chat.completions.create(
@@ -76,7 +84,7 @@ async def build_answer(result: list[dict[str, Any]], human_query: str) -> str | 
         ],
     )
 
-    return response.choices[0].message.content
+    return response.choices[0].message.content.replace("\n", "").replace("  ", "").replace("> <", "><").replace("\t", "").replace("{\"html\":\"", "").rstrip("\"}")
 
 
 class PostHumanQueryPayload(BaseModel):
