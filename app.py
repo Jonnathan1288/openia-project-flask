@@ -18,7 +18,8 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(servers=[{"url": "http://134.122.114.162:8000"}])
 
-openai.api_key = os.environ["OPEN_AI_API_KEY"]
+# openai.api_key = os.environ["OPEN_AI_API_KEY"]
+openai.api_key = "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"
 
 async def human_query_to_sql(human_query: str):
 
