@@ -16,7 +16,7 @@ load_dotenv(find_dotenv())
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(servers=[{"url": "https://b55a-179-49-41-84.ngrok-free.app"}])
+app = FastAPI(servers=[{"url": "http://134.122.114.162:8000"}])
 
 openai.api_key = os.environ["OPEN_AI_API_KEY"]
 

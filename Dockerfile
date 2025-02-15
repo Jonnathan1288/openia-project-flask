@@ -27,4 +27,5 @@ EXPOSE 8000
 
 # Comando para iniciar la aplicación con uvicorn.
 # Se asume que tu aplicación principal está en "app.py" y la instancia de FastAPI se llama "app"
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
