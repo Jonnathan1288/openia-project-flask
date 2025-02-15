@@ -20,6 +20,8 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 # Copia el resto del código del proyecto al contenedor
 COPY . .
 
+COPY .env /app/.env
+
 # Expone el puerto que utilizará la aplicación (por defecto uvicorn escucha en el 8000)
 EXPOSE 8000
 
