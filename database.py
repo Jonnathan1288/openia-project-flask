@@ -13,9 +13,7 @@ engine = create_engine(DB_URL, poolclass=QueuePool, pool_size=5, max_overflow=10
 Session = sessionmaker(bind=engine)
 
 def get_schema() -> LiteralString:
-    engine = create_engine(
-        "postgresql+psycopg2://postgres:1234@3.141.36.155:5433/postgres"
-    )
+    engine = create_engine(DB_URL)
     inspector = inspect(engine)
     table_names = inspector.get_table_names()
 

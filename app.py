@@ -4,25 +4,21 @@ import os
 from typing import Any
 
 import openai
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 from fastapi import FastAPI
 from openai import BaseModel
 
 import database
 
-load_dotenv()
+load_dotenv(find_dotenv()) 
+# load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-BACKEND_SERVER = os.getenv("SERVER_URL")
+app = FastAPI(servers=[{"url": "https://b55a-179-49-41-84.ngrok-free.app"}])
 
-app = FastAPI(servers=[{"url": "https://6a2e-190-110-216-245.ngrok-free.app"}])
-
-print('----------------------------------------------------');
-print(BACKEND_SERVER)
-print('----------------------------------------------------');
-openai.api_key = "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"
-#openai.api_key = os.getenv(BACKEND_SERVER)
+openai.api_key = os.environ["OPEN_AI_API_KEY"]
 
 async def human_query_to_sql(human_query: str):
 
