@@ -23,152 +23,164 @@ app = FastAPI(servers=[{"url": "http://134.122.114.162:8000"}])
 openai.api_key = os.environ["OPEN_AI_API_KEY"]
 
 async def human_query_to_sql(human_query: str):
-
-    # We get the database schema
+    """
+    Identifica si la consulta del usuario es un saludo o pregunta general.
+    Si no es una consulta SQL válida, responde con HTML.
+    Si es una consulta SQL, la devuelve en JSON.
+    """
+    
+    # Get schema
     database_schema = database.get_schema()
 
+    classify_prompt = """
+    Eres un asistente que clasifica consultas del usuario en dos categorías:
+    - Si la consulta es un saludo o despedida (por ejemplo, "Hola", "Adiós", "Nos vemos", "Buenos días", "Buenas tardes"), responde **exactamente** con "NO".
+    - Para cualquier otra consulta, responde **exactamente** con "YES".
+
+    Solo responde con "YES" o "NO", sin texto adicional.
+    """
+
+    response = openai.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": classify_prompt},
+            {"role": "user", "content": human_query},
+        ],
+        max_tokens=5,
+    )
+
+    classification = response.choices[0].message.content.strip().upper()
+
+    print(f" GPT: {classification}") 
+
+    if classification == "NO":
+        chat_response = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "Responde de manera amigable al usuario."},
+                {"role": "user", "content": human_query},
+            ],
+        )
+
+        message = chat_response.choices[0].message.content
+
+        response_html = f"""
+        <html>
+        <head>
+            <style>
+                h2 {{ color: #0c5460; }}
+                p {{ color: #0c5460; font-size: 18px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h2>🤖 Motobot</h2>
+                <p>{message}</p>
+            </div>
+        </body>
+        </html>
+        """
+
+        return (True, response_html); 
+
+    # Generate the SQL query
     system_message = f"""
-    Given the following schema, write a SQL query that retrieves the requested information. 
-    Return the SQL query inside a JSON structure with the key "sql_query".
+    Dado el siguiente esquema de base de datos, genera una consulta SQL precisa y optimizada que recupere la información solicitada.
+
+    **Reglas para generar una consulta SQL eficiente:**
+    - Usa **LIKE** o **UPPER** para búsquedas que no diferencien entre mayúsculas y minúsculas en campos de texto.
+    - Usa **to_tsvector** para búsquedas de texto completo en descripciones o campos largos.
+    - Usa **LIKE '%X%'** si el usuario busca palabras clave sin requerir coincidencia exacta.
+    - Usa **BETWEEN** en lugar de `>=` y `<=` cuando se filtren fechas o rangos numéricos.
+    - Evita el uso de `=` a menos que el usuario haya solicitado una coincidencia exacta.
+    - Combina **AND/OR** de manera lógica si hay múltiples filtros en la consulta.
+    - Si en el esquema existe un campo `active`, asegúrate de incluir `WHERE active = TRUE`.
+
+    **Ejemplo de respuesta JSON esperada:**
     <example>{{
-        "sql_query": "SELECT * FROM services WHERE active;"
-        "original_query": "Show me all the services available."
-    }}
-    </example>
+        "sql_query": "SELECT * FROM productos WHERE nombre LIKE '%camiseta%' AND active = TRUE;",
+        "original_query": "Muéstrame productos que contengan 'camiseta'"
+    }}</example>
+    **Esquema de la base de datos:**
     <schema>
     {database_schema}
     </schema>
     """
-    user_message = human_query
 
-    # We send the complete scheme with the query to the LLM
+
+    print('---------------------USER MESSAGE---------------------')
+    print(human_query)
+    print('---------------------END MESSAGE---------------------')
+
     response = openai.chat.completions.create(
         model="gpt-3.5-turbo",
         response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": system_message},
-            {"role": "user", "content": user_message},
+            {"role": "user", "content": human_query},
         ],
     )
 
-    return response.choices[0].message.content
+    print('API RESPONSE GPT-> ' + response.choices[0].message.content)
 
-# async def build_answer(result: list[dict[str, Any]], human_query: str) -> str | None:
-#     """
-#     Dado una pregunta del usuario y la respuesta SQL de la base de datos, genera una respuesta en HTML bien estructurada y visualmente atractiva.
-#     La respuesta debe estar estilizada con elementos HTML para mejorar la legibilidad y solo incluir registros activos.
-#     """
-
-#     active_results = [item for item in result if item.get("active")]
-
-#     system_message = f"""
-#     Basado en la siguiente respuesta de la base de datos y la consulta del usuario, genera una respuesta en HTML visualmente atractiva y clara.
-#     - Formatea la respuesta usando `<div>` para secciones, `<h2>` para títulos y `<p>` para descripciones.
-#     - Si la consulta involucra productos o servicios, usa `<ul>` o `<ol>` con un estilo atractivo.
-#     - Aplica estilos CSS para mejorar la presentación.
-#     - Usa iconos (✅, 💰, 📞, ⭐) para mejorar la experiencia visual.
-#     - Incluye un encabezado llamativo con fondo destacado.
-#     - Presenta la información en una lista elegante con separación clara entre elementos.
-#     - Finaliza con un mensaje amigable y una llamada a la acción, como "📞 Contáctanos para más información o asesoría personalizada".
-#     <user_question>{human_query}</user_question>
-#     <sql_response>{active_results}</sql_response>
-#     Genera una estructura HTML válida en una sola línea sin saltos de línea ni espacios innecesarios, asegurando que luzca profesional y sea fácil de visualizar.
-#     """
-
-#     response = openai.chat.completions.create(
-#         model="gpt-3.5-turbo",
-#         messages=[
-#             {"role": "system", "content": system_message},
-#         ],
-#     )
-
-#     return response.choices[0].message.content.replace("\n", "").replace("  ", "").replace("> <", "><").replace("\t", "").replace("{\"html\":\"", "").rstrip("\"}")
-
-import html
-from typing import Any
-
-import openai
-
-# async def build_answer(result: list[dict[str, Any]], human_query: str) -> str:
-#     """
-#     Genera una respuesta en HTML bien estructurada y visualmente atractiva basada en la consulta del usuario y los datos de la base de datos.
-#     """
-
-#     active_results = [item for item in result if item.get("active")]
-
-#     system_message = f"""
-#     Genera una respuesta **solo en HTML puro**, sin JSON, sin etiquetas innecesarias.  
-#     Formatea la respuesta de manera visualmente atractiva, usando:
-#     - `<div>` para secciones
-#     - `<h2>` para títulos, `<p>` para descripciones
-#     - `<ul>` o `<ol>` para listas de productos/servicios.
-#     - Usa `<img>` con `src="..."` sin caracteres escapados.
-
-#     🔹 **Ejemplo de salida esperada (debes seguir este formato y solo devolver HTML)**:
-#     ```html
-#     <div style="background-color: #f0f0f0; padding: 20px;">
-#         <h2 style="text-align: center; color: #333;">Nuestros Servicios</h2>
-#         <ul style="list-style-type: none; padding: 0;">
-#             <li>
-#                 <h3>CAMBIO DE ACEITE Y FILTROS</h3>
-#                 <p>Sustitución del aceite del motor y cambio de filtros.</p>
-#                 <p>💰 Precio: $100</p>
-#                 <img src="https://example.com/image.jpg" alt="Cambio de Aceite" style="max-width: 200px;">
-#             </li>
-#         </ul>
-#         <p style="text-align: center; color: #666;">📞 Contáctanos para más información.</p>
-#     </div>
-#     ```
-#     🔹 **Tu respuesta debe seguir este formato exacto. No devuelvas JSON ni caracteres escapados.**
-    
-#     <user_question>{human_query}</user_question>
-#     <sql_response>{active_results}</sql_response>
-#     """
-
-#     response = openai.chat.completions.create(
-#         model="gpt-3.5-turbo",
-#         messages=[{"role": "system", "content": system_message}],
-#     )
-
-#     print(response.choices[0].message.content)
- 
-#     return response.choices[0].message.content
-
+    return (False, response.choices[0].message.content)
 
 async def build_answer(result: list[dict[str, Any]], human_query: str) -> str:
     """
-    Genera una respuesta en HTML bien estructurada basada en la consulta del usuario y los datos de la base de datos.
+    Genera una respuesta en HTML bien estructurada basada en la consulta del usuario y los datos obtenidos de la base de datos.
     """
 
-    active_results = [item for item in result if item.get("active")]
+    columns = list(result[0].keys())
 
     system_message = f"""
-    Genera una respuesta **solo en HTML puro**, sin JSON, sin etiquetas innecesarias.  
-    Formatea la respuesta de manera visualmente atractiva, usando:
-    - `<div>` para secciones
-    - `<h2>` para títulos, `<p>` para descripciones
-    - `<ul>` o `<ol>` para listas de productos/servicios.
-    - Usa `<img>` con `src="..."` sin caracteres escapados.
+    Eres un asistente que genera respuestas en HTML bien estructurado basado en la información obtenida de la base de datos.
 
-    **Ejemplo de salida esperada (solo HTML, sin JSON ni comillas escapadas):**
+    **Reglas**:
+    - Analiza automáticamente las columnas de la base de datos y organiza la información sin tablas ni tarjetas.
+    - Presenta la información de manera fluida usando `<h2>`, `<h3>`, `<p>`, `<ul>`, y `<ol>`.
+    - Si los datos contienen nombres (`name`, `title`, `brand`), muéstralos con `<h3>`.
+    - Si los datos contienen descripciones (`description`, `info`, etc.), inclúyelos en `<p>`.
+    - Si los datos contienen imágenes (`image_url`, `photo`, etc.), inclúyelas en `<img>` con un diseño elegante.
+    - Si los datos contienen fechas (`date`, `created_at`, etc.), preséntalas en un formato claro dentro de `<p>`.
+    - Si hay información financiera (`price`, `cost`, `amount`, etc.), preséntala de forma elegante con `$`.
+    - Si alguna columna tiene una lista de elementos trata de resaltar con más información.
+    - Si alguna columna tiene una lista de elementos trata de resaltar con más información.
+    - No muestres códigos como activo, id, fecha de creación, fecha de actualización.
+    - No muestres códigos como activo, id, fecha de creación, fecha de actualización.
+    - Si tiene nivel agrega estilos para marcar el inconveniente.
+    - Todas las respuestas deben ser en español.
+
+        
+    **Ejemplo de salida esperada cuando hay productos:**
     ```html
-    <div style="background-color: #f0f0f0; padding: 20px;">
-        <h2 style="text-align: center; color: #333;">Nuestros Servicios</h2>
-        <ul style="list-style-type: none; padding: 0;">
-            <li>
-                <h3>CAMBIO DE ACEITE Y FILTROS</h3>
-                <p>Sustitución del aceite del motor y cambio de filtros.</p>
-                <p>💰 Precio: $100</p>
-                <img src="https://example.com/image.jpg" alt="Cambio de Aceite" style="max-width: 200px;">
-            </li>
-        </ul>
-        <p style="text-align: center; color: #666;">📞 Contáctanos para más información.</p>
-    </div>
+    <html>
+        <head>
+            <style>
+                h2 {{ color: #0c5460; }}
+                p {{ color: #0c5460; font-size: 18px; }}
+            </style>
+        </head>
+        <body>
+            <h2>🤖 Motobot</h2>
+            <div style="padding:20px; background-color:#f9f9f9;">
+            
+                <h2>Agrega titulo bonito con información de tu parte agregando </h2>
+                <h3>Da una descripción bonita</h3>
+                <p>Aceite sintético para motos. 💰 Precio: $25.00</p>
+                <img src="https://example.com/aceite.jpg" alt="Aceite Premium" style="max-width:200px; border-radius:10px;">
+                <h2>Agrega recomendaciones de uso, etc.  </h2>
+                <p style="text-align: center; color: #666;">📞 Contáctanos para más información.</p>
+            </div>
+        </body>
+    </html>
     ```
-    **No devuelvas JSON ni datos adicionales, solo HTML limpio.**
-    
+
+    🔹 **IMPORTANTE**:
+    - No devuelvas JSON ni otros formatos, **solo HTML válido y estructurado dinámicamente**.
+    - Usa estilos CSS mínimos para mejorar la presentación sin sobrecargar la respuesta.
+
     <user_question>{human_query}</user_question>
-    <sql_response>{active_results}</sql_response>
+    <sql_response>{result}</sql_response>
     """
 
     response = openai.chat.completions.create(
@@ -176,11 +188,7 @@ async def build_answer(result: list[dict[str, Any]], human_query: str) -> str:
         messages=[{"role": "system", "content": system_message}],
     )
 
-    # 🔹 SOLO IMPRIMIR PARA VERIFICACIÓN
-    # print(response.choices[0].message.content)  
-
-    # 🔹 DEVOLVER DIRECTAMENTE SIN MODIFICAR
-    return response.choices[0].message.content
+    return response.choices[0].message.content.strip()
 
 
 class PostHumanQueryPayload(BaseModel):
@@ -200,9 +208,6 @@ async def human_query(payload: PostHumanQueryPayload):
 
     # Transforms the question into a SQL statement
     sql_query = await human_query_to_sql(payload.human_query)
-
-    if not sql_query:
-        return {"err": "SQL query generation failed"}
 
     print('-----------------------------sql response ------------------------');    
     print(sql_query);    
@@ -231,8 +236,6 @@ async def human_query(payload: PostHumanQueryPayload):
         <head>
             <title>Error al Procesar</title>
             <style>
-                body { font-family: Arial, sans-serif; background-color: #f8d7da; text-align: center; padding: 50px; }
-                .container { background-color: white; padding: 20px; border-radius: 10px; box-shadow: 0px 0px 10px #ccc; display: inline-block; }
                 h2 { color: #721c24; }
                 p { color: #721c24; font-size: 18px; }
             </style>
@@ -247,24 +250,35 @@ async def human_query(payload: PostHumanQueryPayload):
         </html>
         """
 
-    sql_query = await human_query_to_sql(payload.human_query)
+    try :
+        is_invalid, sql_query = await human_query_to_sql(payload.human_query)
 
-    if not sql_query:
-        return HTMLResponse(content=error_html)
+        if (is_invalid):
+            return HTMLResponse(content=sql_query)
 
-    print('-----------------------------sql response ------------------------');    
-    print(sql_query);    
-    print('-----------------------------sql response ------------------------');    
-    result_dict = json.loads(sql_query)
+        if not sql_query:
+            return HTMLResponse(content=error_html)
 
-    result = await database.query(result_dict["sql_query"])
+        print('-----------------------------sql response ------------------------');    
+        print(sql_query);    
+        print('-----------------------------sql response ------------------------');    
+        result_dict = json.loads(sql_query)
 
-    answer = await build_answer(result, payload.human_query)
-    if not answer:
-        
-        return HTMLResponse(content=error_html)
+        result = await database.query(result_dict["sql_query"])
 
-    return HTMLResponse(content=answer)
+
+        print('-----------------------------SQL ROW ------------------------');    
+        print(result);    
+        print('-----------------------------SQL ROW ------------------------');  
+
+        answer = await build_answer(result, payload.human_query)
+        if not answer:
+            return HTMLResponse(content=error_html)
+
+        return HTMLResponse(content=answer)
+
+    except Exception as e:
+        return HTMLResponse(content=error_html)    
 
 if __name__ == "__main__":
     import uvicorn
