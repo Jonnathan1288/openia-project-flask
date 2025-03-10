@@ -11,10 +11,9 @@ from fastapi.responses import HTMLResponse
 from flask import Flask, jsonify
 from openai import BaseModel
 
-import database, smtp
-
+import database
+import smtp
 from models.email import Email
-
 
 load_dotenv(find_dotenv()) 
 # load_dotenv()
@@ -286,7 +285,7 @@ async def human_query(payload: PostHumanQueryPayload):
 
 
 class EmailRequest(BaseModel):
-    mensaje: str 
+    message: str 
     subject: str 
     to: str
 
@@ -296,21 +295,19 @@ class EmailRequest(BaseModel):
     operation_id="post_send_email",
     description="Send Email"
 )
-def send_email_endpoint(
+async def send_email_endpoint(
     email_request: EmailRequest
 ):
-    print('-----------------------------------------------------------')
-    print(email_request)
     email = Email(
-        mensaje=email_request.mensaje,
+        mensaje=email_request.message,
         subject=email_request.subject,
         to=email_request.to
     )
 
-    if smtp.send_email(email):
-        return {"status": "success", "message": "Correo enviado correctamente"}
+    if smtp.send_Email(email):
+        return {"statusCode": "200", "message": "Successful"}
     else:
-        return {"status": "success", "message": "Correo enviado correctamente"}
+        return {"statusCode": "400", "message": "Error"}
 
 
 if __name__ == "__main__":
