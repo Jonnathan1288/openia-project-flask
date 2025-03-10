@@ -11,14 +11,18 @@ from fastapi.responses import HTMLResponse
 from flask import Flask, jsonify
 from openai import BaseModel
 
-import database
+import database, smtp
+
+from models.email import Email
+
 
 load_dotenv(find_dotenv()) 
 # load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(servers=[{"url": "http://134.122.114.162:8000"}])
+# app = FastAPI(servers=[{"url": "http://134.122.114.162:8000"}])
+app = FastAPI()
 
 openai.api_key = os.environ["OPEN_AI_API_KEY"]
 
@@ -279,6 +283,35 @@ async def human_query(payload: PostHumanQueryPayload):
 
     except Exception as e:
         return HTMLResponse(content=error_html)    
+
+
+class EmailRequest(BaseModel):
+    mensaje: str 
+    subject: str 
+    to: str
+
+@app.post(
+    "/api/v1/send-email",
+    name="Send Email",
+    operation_id="post_send_email",
+    description="Send Email"
+)
+def send_email_endpoint(
+    email_request: EmailRequest
+):
+    print('-----------------------------------------------------------')
+    print(email_request)
+    email = Email(
+        mensaje=email_request.mensaje,
+        subject=email_request.subject,
+        to=email_request.to
+    )
+
+    if smtp.send_email(email):
+        return {"status": "success", "message": "Correo enviado correctamente"}
+    else:
+        return {"status": "success", "message": "Correo enviado correctamente"}
+
 
 if __name__ == "__main__":
     import uvicorn
